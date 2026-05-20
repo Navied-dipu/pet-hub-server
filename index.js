@@ -29,10 +29,6 @@ async function run() {
     const petCollection = db.collection("petCollection");
     const adoptionCollection = db.collection("adoptionCollection");
 
-    // ─────────────────────────────────────────────
-    // Pet Collection Routes
-    // ─────────────────────────────────────────────
-
     app.post("/add-pet", async (req, res) => {
       const pet = req.body;
       const result = await petCollection.insertOne(pet);
@@ -48,7 +44,7 @@ async function run() {
       if (search && search.trim() !== "") {
         query.petName = {
           $regex: search.trim(),
-          $options: "i", 
+          $options: "i",
         };
       }
 
@@ -63,7 +59,6 @@ async function run() {
         }
       }
 
-      
       const sortOption = {};
       if (sort === "asc") {
         sortOption.petName = 1;
@@ -71,10 +66,7 @@ async function run() {
         sortOption.petName = -1;
       }
 
-      const result = await petCollection
-        .find(query)
-        .sort(sortOption)
-        .toArray();
+      const result = await petCollection.find(query).sort(sortOption).toArray();
 
       res.json(result);
     });
@@ -124,15 +116,23 @@ async function run() {
     app.post("/adopt", async (req, res) => {
       const adoptionData = req.body;
       try {
-        const pet = await petCollection.findOne({ _id: new ObjectId(adoptionData.petId) });
+        const pet = await petCollection.findOne({
+          _id: new ObjectId(adoptionData.petId),
+        });
         if (!pet) {
           return res.status(404).send({ error: "Pet not found" });
         }
         if (pet.ownerEmail === adoptionData.userEmail) {
-          return res.status(400).send({ error: "Pet owners are not allowed to submit adoption requests." });
+          return res
+            .status(400)
+            .send({
+              error: "Pet owners are not allowed to submit adoption requests.",
+            });
         }
         if (pet.status === "Adopted") {
-          return res.status(400).send({ error: "This pet has already been adopted." });
+          return res
+            .status(400)
+            .send({ error: "This pet has already been adopted." });
         }
         const result = await adoptionCollection.insertOne(adoptionData);
         res.send(result);
@@ -167,7 +167,9 @@ async function run() {
             return res.status(404).send({ error: "Pet not found" });
           }
           if (pet.status === "Adopted") {
-            return res.status(400).send({ error: "This pet has already been adopted." });
+            return res
+              .status(400)
+              .send({ error: "This pet has already been adopted." });
           }
 
           const existingApproved = await adoptionCollection.findOne({
@@ -175,7 +177,11 @@ async function run() {
             status: "approved",
           });
           if (existingApproved) {
-            return res.status(400).send({ error: "Another adoption request has already been approved." });
+            return res
+              .status(400)
+              .send({
+                error: "Another adoption request has already been approved.",
+              });
           }
         } catch (error) {
           console.error(error);
@@ -196,7 +202,7 @@ async function run() {
         // Auto-reject other pending requests for this pet
         await adoptionCollection.updateMany(
           { petId: petId, status: "pending", _id: { $ne: new ObjectId(id) } },
-          { $set: { status: "rejected" } }
+          { $set: { status: "rejected" } },
         );
       }
       res.send(result);
@@ -211,7 +217,9 @@ async function run() {
 
     // MongoDB ping
     await client.db("admin").command({ ping: 1 });
-    console.log("✅ Pinged your deployment. Successfully connected to MongoDB!");
+    console.log(
+      "✅ Pinged your deployment. Successfully connected to MongoDB!",
+    );
   } finally {
     // await client.close();
   }

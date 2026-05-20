@@ -28,23 +28,61 @@ async function run() {
     const db = client.db("petHub");
     const petCollection = db.collection("petCollection");
     const adoptionCollection = db.collection("adoptionCollection");
-    // pet collection
+
+    // ─────────────────────────────────────────────
+    // Pet Collection Routes
+    // ─────────────────────────────────────────────
+
     app.post("/add-pet", async (req, res) => {
       const pet = req.body;
       const result = await petCollection.insertOne(pet);
       res.send(result);
     });
+
+   
     app.get("/pets", async (req, res) => {
-      const result = await petCollection.find().toArray();
+      const { search, species, sort } = req.query;
+
+      const query = {};
+
+      if (search && search.trim() !== "") {
+        query.petName = {
+          $regex: search.trim(),
+          $options: "i", 
+        };
+      }
+
+      if (species && species.trim() !== "") {
+        const speciesArray = species
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        if (speciesArray.length > 0) {
+          query.species = { $in: speciesArray };
+        }
+      }
+
+      
+      const sortOption = {};
+      if (sort === "asc") {
+        sortOption.petName = 1;
+      } else if (sort === "desc") {
+        sortOption.petName = -1;
+      }
+
+      const result = await petCollection
+        .find(query)
+        .sort(sortOption)
+        .toArray();
+
       res.json(result);
     });
+
     app.get("/pets/:id", async (req, res) => {
       const { id } = req.params;
-
       const query = { _id: new ObjectId(id) };
-
       const result = await petCollection.findOne(query);
-
       res.json(result);
     });
 
@@ -79,7 +117,10 @@ async function run() {
       res.send(result);
     });
 
-    // adoption collection
+    // ─────────────────────────────────────────────
+    // Adoption Collection Routes
+    // ─────────────────────────────────────────────
+
     app.post("/adopt", async (req, res) => {
       const adoptionData = req.body;
       const result = await adoptionCollection.insertOne(adoptionData);
@@ -104,9 +145,7 @@ async function run() {
       const { id } = req.params;
       const { status, petId } = req.body;
       const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: { status: status },
-      };
+      const updateDoc = { $set: { status: status } };
       const result = await adoptionCollection.updateOne(filter, updateDoc);
 
       if (status === "approved" && petId) {
@@ -124,12 +163,10 @@ async function run() {
       const result = await adoptionCollection.deleteOne(query);
       res.send(result);
     });
+
     // MongoDB ping
     await client.db("admin").command({ ping: 1 });
-
-    console.log(
-      "✅ Pinged your deployment. Successfully connected to MongoDB!",
-    );
+    console.log("✅ Pinged your deployment. Successfully connected to MongoDB!");
   } finally {
     // await client.close();
   }

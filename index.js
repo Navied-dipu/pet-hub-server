@@ -123,8 +123,23 @@ async function run() {
 
     app.post("/adopt", async (req, res) => {
       const adoptionData = req.body;
-      const result = await adoptionCollection.insertOne(adoptionData);
-      res.send(result);
+      try {
+        const pet = await petCollection.findOne({ _id: new ObjectId(adoptionData.petId) });
+        if (!pet) {
+          return res.status(404).send({ error: "Pet not found" });
+        }
+        if (pet.ownerEmail === adoptionData.userEmail) {
+          return res.status(400).send({ error: "Pet owners are not allowed to submit adoption requests." });
+        }
+        if (pet.status === "Adopted") {
+          return res.status(400).send({ error: "This pet has already been adopted." });
+        }
+        const result = await adoptionCollection.insertOne(adoptionData);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Internal server error" });
+      }
     });
 
     app.get("/adoption-requests/pet/:petId", async (req, res) => {
@@ -144,6 +159,30 @@ async function run() {
     app.put("/adopt/:id", async (req, res) => {
       const { id } = req.params;
       const { status, petId } = req.body;
+
+      if (status === "approved" && petId) {
+        try {
+          const pet = await petCollection.findOne({ _id: new ObjectId(petId) });
+          if (!pet) {
+            return res.status(404).send({ error: "Pet not found" });
+          }
+          if (pet.status === "Adopted") {
+            return res.status(400).send({ error: "This pet has already been adopted." });
+          }
+
+          const existingApproved = await adoptionCollection.findOne({
+            petId: petId,
+            status: "approved",
+          });
+          if (existingApproved) {
+            return res.status(400).send({ error: "Another adoption request has already been approved." });
+          }
+        } catch (error) {
+          console.error(error);
+          return res.status(500).send({ error: "Internal server error" });
+        }
+      }
+
       const filter = { _id: new ObjectId(id) };
       const updateDoc = { $set: { status: status } };
       const result = await adoptionCollection.updateOne(filter, updateDoc);
@@ -153,6 +192,12 @@ async function run() {
         await petCollection.updateOne(petFilter, {
           $set: { status: "Adopted" },
         });
+
+        // Auto-reject other pending requests for this pet
+        await adoptionCollection.updateMany(
+          { petId: petId, status: "pending", _id: { $ne: new ObjectId(id) } },
+          { $set: { status: "rejected" } }
+        );
       }
       res.send(result);
     });

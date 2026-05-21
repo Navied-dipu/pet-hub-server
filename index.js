@@ -89,7 +89,7 @@ async function run() {
       res.json(result);
     });
 
-    app.get("/pets/:id", verifyToken, async (req, res) => {
+    app.get("/pets/:id",async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await petCollection.findOne(query);

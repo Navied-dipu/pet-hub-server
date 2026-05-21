@@ -1,11 +1,11 @@
-require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-
+const dotenv = require("dotenv");
 const app = express();
 const port = 5000;
-
+dotenv.config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { createRemoteJWKSet, jwtVerify } = require("jose-cjs");
 
 // middleware
 app.use(cors());
@@ -21,7 +21,26 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
-
+const JWKS = createRemoteJWKSet(
+  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
+);
+const verifyToken = async (req, res, next) => {
+  const authHeader = req?.headers?.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ error: "Unauthorized" });
+  }
+  const token = authHeader?.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ error: "Unauthorized" });
+  }
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    next();
+  } catch (error) {
+    console.error("Token verification failed:", error);
+    return res.status(401).send({ error: "Unauthorized" });
+  }
+};
 async function run() {
   try {
     await client.connect();
@@ -29,13 +48,12 @@ async function run() {
     const petCollection = db.collection("petCollection");
     const adoptionCollection = db.collection("adoptionCollection");
 
-    app.post("/add-pet", async (req, res) => {
+    app.post("/add-pet", verifyToken, async (req, res) => {
       const pet = req.body;
       const result = await petCollection.insertOne(pet);
       res.send(result);
     });
 
-   
     app.get("/pets", async (req, res) => {
       const { search, species, sort } = req.query;
 
@@ -71,14 +89,14 @@ async function run() {
       res.json(result);
     });
 
-    app.get("/pets/:id", async (req, res) => {
+    app.get("/pets/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await petCollection.findOne(query);
       res.json(result);
     });
 
-    app.put("/pets/:id", async (req, res) => {
+    app.put("/pets/:id",verifyToken, async (req, res) => {
       const { id } = req.params;
       const filter = { _id: new ObjectId(id) };
       const updatedPet = req.body;
@@ -102,7 +120,7 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/pets/:id", async (req, res) => {
+    app.delete("/pets/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await petCollection.deleteOne(query);
@@ -113,7 +131,7 @@ async function run() {
     // Adoption Collection Routes
     // ─────────────────────────────────────────────
 
-    app.post("/adopt", async (req, res) => {
+    app.post("/adopt", verifyToken, async (req, res) => {
       const adoptionData = req.body;
       try {
         const pet = await petCollection.findOne({
@@ -123,11 +141,9 @@ async function run() {
           return res.status(404).send({ error: "Pet not found" });
         }
         if (pet.ownerEmail === adoptionData.userEmail) {
-          return res
-            .status(400)
-            .send({
-              error: "Pet owners are not allowed to submit adoption requests.",
-            });
+          return res.status(400).send({
+            error: "Pet owners are not allowed to submit adoption requests.",
+          });
         }
         if (pet.status === "Adopted") {
           return res
@@ -142,21 +158,21 @@ async function run() {
       }
     });
 
-    app.get("/adoption-requests/pet/:petId", async (req, res) => {
+    app.get("/adoption-requests/pet/:petId",verifyToken, async (req, res) => {
       const { petId } = req.params;
       const query = { petId: petId };
       const result = await adoptionCollection.find(query).toArray();
       res.json(result);
     });
 
-    app.get("/my-adoptions/:email", async (req, res) => {
+    app.get("/my-adoptions/:email",verifyToken, async (req, res) => {
       const { email } = req.params;
       const query = { userEmail: email };
       const result = await adoptionCollection.find(query).toArray();
       res.json(result);
     });
 
-    app.put("/adopt/:id", async (req, res) => {
+    app.put("/adopt/:id",verifyToken, async (req, res) => {
       const { id } = req.params;
       const { status, petId } = req.body;
 
@@ -177,11 +193,9 @@ async function run() {
             status: "approved",
           });
           if (existingApproved) {
-            return res
-              .status(400)
-              .send({
-                error: "Another adoption request has already been approved.",
-              });
+            return res.status(400).send({
+              error: "Another adoption request has already been approved.",
+            });
           }
         } catch (error) {
           console.error(error);
@@ -208,7 +222,7 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/adopt/:id", async (req, res) => {
+    app.delete("/adopt/:id",verifyToken, async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await adoptionCollection.deleteOne(query);

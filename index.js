@@ -43,7 +43,7 @@ const verifyToken = async (req, res, next) => {
 };
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db("petHub");
     const petCollection = db.collection("petCollection");
     const adoptionCollection = db.collection("adoptionCollection");
@@ -230,7 +230,7 @@ async function run() {
     });
 
     // MongoDB ping
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "✅ Pinged your deployment. Successfully connected to MongoDB!",
     );
